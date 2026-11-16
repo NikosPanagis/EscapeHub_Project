@@ -1,0 +1,1 @@
+![Διάγραμμα Αρχιτεκτονικής](Architecture_Escape_Hub.png)
