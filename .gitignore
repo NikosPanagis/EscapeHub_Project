@@ -16,4 +16,10 @@ buildNumber.properties
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 .idea/
+
+.vscode/
+*.iml
+node_modules/
+src/main/frontend/generated/
+vite.generated.ts
 .env
