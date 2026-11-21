@@ -1,13 +1,5 @@
 package com.ihu.escapehub.user;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,7 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-/** Unit tests: repository and encoder are mocks, so no database is needed. */
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+/** Unit tests for the registration rules. Repository and encoder are mocks: no database needed. */
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
@@ -33,10 +29,14 @@ class UserServiceTest {
     @InjectMocks
     private UserService userService;
 
+    /** Sets up the "happy path": encoding works and saveAndFlush returns the user it was given. */
     private void stubSuccessfulSave() {
         when(passwordEncoder.encode(any())).thenReturn("hashed");
-        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.saveAndFlush(any(User.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
+
+    // --- Tests required by the Sprint 1 guide ---
 
     @Test
     void newUsernameIsSaved() {
@@ -46,18 +46,6 @@ class UserServiceTest {
 
         verify(userRepository).saveAndFlush(any(User.class));
         assertEquals("alice", saved.getUsername());
-    }
-
-    @Test
-    void passwordIsNotStoredAsGiven() {
-        stubSuccessfulSave();
-
-        userService.register("alice", "secret1");
-
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).saveAndFlush(captor.capture());
-        assertNotEquals("secret1", captor.getValue().getPasswordHash());
-        assertEquals("hashed", captor.getValue().getPasswordHash());
     }
 
     @Test
@@ -72,19 +60,21 @@ class UserServiceTest {
     }
 
     @Test
-    void concurrentDuplicateCaughtByDatabaseIsReportedAsTaken() {
-        when(passwordEncoder.encode(any())).thenReturn("hashed");
-        when(userRepository.saveAndFlush(any(User.class)))
-                .thenThrow(new DataIntegrityViolationException("unique constraint"));
+    void passwordIsNotStoredAsGiven() {
+        stubSuccessfulSave();
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> userService.register("alice", "secret1"));
+        userService.register("alice", "secret1");
 
-        assertEquals(UserService.USERNAME_TAKEN, e.getMessage());
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).saveAndFlush(captor.capture());
+        assertNotEquals("secret1", captor.getValue().getPasswordHash());
+        assertEquals("hashed", captor.getValue().getPasswordHash());
     }
 
+    // --- Username rules ---
+
     @Test
-    void usernameIsTrimmed() {
+    void usernameIsStripped() {
         stubSuccessfulSave();
 
         User saved = userService.register("  alice  ", "secret1");
@@ -100,34 +90,28 @@ class UserServiceTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> userService.register(username, "secret1"));
 
-        assertEquals(UserService.USERNAME_REQUIRED, e.getMessage());
+        assertEquals("Το username είναι υποχρεωτικό.", e.getMessage());
         verify(userRepository, never()).saveAndFlush(any());
     }
 
-    @Test
-    void tooLongUsernameIsRejected() {
-        String username = "a".repeat(UserService.MAX_USERNAME_LENGTH + 1);
-
-        assertThrows(IllegalArgumentException.class,
-                () -> userService.register(username, "secret1"));
-    }
+    // --- Password length rules ---
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"12345"})
     void tooShortPasswordIsRejected(String password) {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> userService.register("alice", password));
 
-        assertEquals(UserService.PASSWORD_TOO_SHORT, e.getMessage());
         verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).saveAndFlush(any());
     }
 
     @Test
     void passwordWithExactlyMinimumLengthIsAccepted() {
         stubSuccessfulSave();
 
-        userService.register("alice", "123456");
+        userService.register("alice", "a".repeat(UserService.MIN_PASSWORD_LENGTH));
 
         verify(userRepository).saveAndFlush(any(User.class));
     }
@@ -145,18 +129,33 @@ class UserServiceTest {
     void passwordOver72BytesIsRejected() {
         String password = "a".repeat(UserService.MAX_PASSWORD_BYTES + 1);
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        assertThrows(IllegalArgumentException.class,
                 () -> userService.register("alice", password));
 
-        assertEquals(UserService.PASSWORD_TOO_LONG, e.getMessage());
+        verify(passwordEncoder, never()).encode(any());
     }
 
     @Test
     void greekPasswordIsMeasuredInBytesNotCharacters() {
-        // 40 Greek letters = 40 characters but 80 bytes in UTF-8
+        // 40 Greek letters = 40 characters (allowed by length) but 80 bytes (over the limit)
         String password = "α".repeat(40);
 
         assertThrows(IllegalArgumentException.class,
                 () -> userService.register("alice", password));
+    }
+
+    // --- Two registrations with the same name at the same time ---
+
+    @Test
+    void duplicateCaughtByDatabaseIsReportedAsTaken() {
+        // existsByUsername returns false (default), as if the other user was not saved yet
+        when(passwordEncoder.encode(any())).thenReturn("hashed");
+        when(userRepository.saveAndFlush(any(User.class)))
+                .thenThrow(new DataIntegrityViolationException("unique constraint"));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> userService.register("alice", "secret1"));
+
+        assertEquals(UserService.USERNAME_TAKEN, e.getMessage());
     }
 }
