@@ -1,23 +1,21 @@
 package com.ihu.escapehub.puzzle;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.ihu.escapehub.mission.MissionDefinition;
 import com.ihu.escapehub.mission.MissionLoader;
 import com.ihu.escapehub.mission.PathDefinition;
 import com.ihu.escapehub.mission.PuzzleDefinition;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PuzzleServiceTest {
@@ -26,49 +24,94 @@ class PuzzleServiceTest {
     private MissionLoader missionLoader;
 
     @Mock
-    private SolvedPuzzleRepository solvedPuzzleRepository;
+    private SolvedPuzzleRepository repository;
+
+    @Mock
+    private EvidenceUnlocker evidenceUnlocker;
 
     private PuzzleService puzzleService;
 
     @BeforeEach
     void setUp() {
-        puzzleService = spy(new PuzzleService(missionLoader, solvedPuzzleRepository));
+        puzzleService = new PuzzleService(missionLoader, repository, evidenceUnlocker, new PuzzleFactory());
+    }
 
-        PuzzleDefinition puzzleDef = new PuzzleDefinition(
-                "p1", "text", "Ποιο έργο γράφτηκε στη Βίλα Ντιοντάτι;", "Frankenstein", "clue-book"
+    private PuzzleDefinition sampleDefinition(String type) {
+        return new PuzzleDefinition(
+                "p1",
+                type,
+                "Ποιος έγραψε τον Δράκουλα;",
+                "Bram Stoker",
+                "diary_page_1"
         );
-        PathDefinition pathDef = new PathDefinition("path1", "Διαδρομή 1", List.of(puzzleDef));
-        MissionDefinition missionDef = new MissionDefinition("m1", "Villa Diodati", "Περιγραφή", List.of(pathDef));
+    }
 
-        when(missionLoader.findAll()).thenReturn(List.of(missionDef));
+    private void stubPuzzleInLoader(PuzzleDefinition puzzleDef) {
+        PathDefinition path = mock(PathDefinition.class);
+        when(path.puzzles()).thenReturn(List.of(puzzleDef));
+
+        MissionDefinition mission = mock(MissionDefinition.class);
+        when(mission.paths()).thenReturn(List.of(path));
+
+        when(missionLoader.findAll()).thenReturn(List.of(mission));
     }
 
     @Test
-    void stateTransitionsAndNoDuplicateEvidenceOnSecondCorrectSubmit() {
-        Long teamId = 1L;
-        String puzzleId = "p1";
+    void wrongAnswerReturnsUnsolvedAndDoesNotUnlock() {
+        stubPuzzleInLoader(sampleDefinition("text"));
+        when(repository.existsByTeamIdAndPuzzleId(1L, "p1")).thenReturn(false);
 
-        // 1. Αρχικά είναι UNSOLVED
-        when(solvedPuzzleRepository.existsByTeamIdAndPuzzleId(teamId, puzzleId)).thenReturn(false);
-        assertEquals(PuzzleStatus.UNSOLVED, puzzleService.status(teamId, puzzleId));
+        PuzzleStatus status = puzzleService.submit(1L, "p1", "λάθος");
 
-        // 2. Λάθος απάντηση -> παραμένει UNSOLVED και δεν αποθηκεύεται
-        PuzzleStatus afterWrong = puzzleService.submit(teamId, puzzleId, "Λάθος απάντηση");
-        assertEquals(PuzzleStatus.UNSOLVED, afterWrong);
-        verify(solvedPuzzleRepository, never()).save(any());
-        verify(puzzleService, never()).notifyEvidenceService(any(), any());
+        assertEquals(PuzzleStatus.UNSOLVED, status);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(evidenceUnlocker);
+    }
 
-        // 3. Πρώτη σωστή απάντηση -> γίνεται SOLVED και καταγράφεται 1 φορά
-        PuzzleStatus afterFirstCorrect = puzzleService.submit(teamId, puzzleId, "  frankenstein ");
-        assertEquals(PuzzleStatus.SOLVED, afterFirstCorrect);
-        verify(solvedPuzzleRepository, times(1)).save(any(SolvedPuzzle.class));
-        verify(puzzleService, times(1)).notifyEvidenceService(any(), any());
+    @Test
+    void correctAnswerSavesAndUnlocksEvidenceOnce() {
+        stubPuzzleInLoader(sampleDefinition("text"));
+        when(repository.existsByTeamIdAndPuzzleId(1L, "p1")).thenReturn(false);
 
-        // 4. Δεύτερη σωστή απάντηση -> παραμένει SOLVED χωρίς διπλή καταγραφή
-        when(solvedPuzzleRepository.existsByTeamIdAndPuzzleId(teamId, puzzleId)).thenReturn(true);
-        PuzzleStatus afterSecondCorrect = puzzleService.submit(teamId, puzzleId, "Frankenstein");
-        assertEquals(PuzzleStatus.SOLVED, afterSecondCorrect);
-        verify(solvedPuzzleRepository, times(1)).save(any(SolvedPuzzle.class));
-        verify(puzzleService, times(1)).notifyEvidenceService(any(), any());
+        PuzzleStatus status = puzzleService.submit(1L, "p1", "bram stoker");
+
+        assertEquals(PuzzleStatus.SOLVED, status);
+        verify(repository, times(1)).save(any(SolvedPuzzle.class));
+        verify(evidenceUnlocker, times(1)).unlock(1L, "diary_page_1");
+    }
+
+    @Test
+    void alreadySolvedReturnsSolvedWithoutDuplicateUnlock() {
+        stubPuzzleInLoader(sampleDefinition("text"));
+        when(repository.existsByTeamIdAndPuzzleId(1L, "p1")).thenReturn(true);
+
+        PuzzleStatus status = puzzleService.submit(1L, "p1", "Bram Stoker");
+
+        assertEquals(PuzzleStatus.SOLVED, status);
+        verify(repository, never()).save(any());
+        verifyNoInteractions(evidenceUnlocker);
+    }
+
+    @Test
+    void concurrentSubmissionHandlesConstraintViolationGracefully() {
+        stubPuzzleInLoader(sampleDefinition("text"));
+        when(repository.existsByTeamIdAndPuzzleId(1L, "p1")).thenReturn(false);
+        when(repository.save(any(SolvedPuzzle.class)))
+                .thenThrow(new DataIntegrityViolationException("Duplicate key"));
+
+        PuzzleStatus status = puzzleService.submit(1L, "p1", "Bram Stoker");
+
+        assertEquals(PuzzleStatus.SOLVED, status);
+        verifyNoInteractions(evidenceUnlocker);
+    }
+
+    @Test
+    void unknownPuzzleTypeThrowsException() {
+        stubPuzzleInLoader(sampleDefinition("unknown_type"));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                puzzleService.submit(1L, "p1", "test")
+        );
+        verifyNoInteractions(repository, evidenceUnlocker);
     }
 }

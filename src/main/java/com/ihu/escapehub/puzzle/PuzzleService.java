@@ -4,23 +4,28 @@ import com.ihu.escapehub.mission.MissionDefinition;
 import com.ihu.escapehub.mission.MissionLoader;
 import com.ihu.escapehub.mission.PathDefinition;
 import com.ihu.escapehub.mission.PuzzleDefinition;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 @Service
 public class PuzzleService {
 
-    private static final Logger log = LoggerFactory.getLogger(PuzzleService.class);
-
     private final MissionLoader missionLoader;
     private final SolvedPuzzleRepository solvedPuzzleRepository;
+    private final EvidenceUnlocker evidenceUnlocker;
+    private final PuzzleFactory puzzleFactory;
 
-    public PuzzleService(MissionLoader missionLoader, SolvedPuzzleRepository solvedPuzzleRepository) {
+    public PuzzleService(MissionLoader missionLoader,
+                         SolvedPuzzleRepository solvedPuzzleRepository,
+                         EvidenceUnlocker evidenceUnlocker,
+                         PuzzleFactory puzzleFactory) {
         this.missionLoader = missionLoader;
         this.solvedPuzzleRepository = solvedPuzzleRepository;
+        this.evidenceUnlocker = evidenceUnlocker;
+        this.puzzleFactory = puzzleFactory;
     }
 
     public PuzzleStatus status(Long teamId, String puzzleId) {
@@ -34,15 +39,19 @@ public class PuzzleService {
         PuzzleDefinition definition = findPuzzleDefinition(puzzleId)
                 .orElseThrow(() -> new IllegalArgumentException("Ο γρίφος δεν βρέθηκε: " + puzzleId));
 
-        Puzzle puzzle = new TextAnswerPuzzle(definition.id(), definition.correctAnswer());
+        Puzzle puzzle = puzzleFactory.create(definition);
 
         if (!puzzle.isCorrect(answer)) {
             return status(teamId, puzzleId);
         }
 
         if (!solvedPuzzleRepository.existsByTeamIdAndPuzzleId(teamId, puzzleId)) {
-            solvedPuzzleRepository.save(new SolvedPuzzle(teamId, puzzleId, LocalDateTime.now()));
-            notifyEvidenceService(teamId, definition);
+            try {
+                solvedPuzzleRepository.save(new SolvedPuzzle(teamId, puzzleId, LocalDateTime.now()));
+            } catch (DataIntegrityViolationException e) {
+                return PuzzleStatus.SOLVED;
+            }
+            evidenceUnlocker.unlock(teamId, definition.evidenceKey());
         }
 
         return PuzzleStatus.SOLVED;
@@ -73,10 +82,5 @@ public class PuzzleService {
             }
         }
         return Optional.empty();
-    }
-
-    protected void notifyEvidenceService(Long teamId, PuzzleDefinition definition) {
-        log.info("Ξεκλειδώθηκε το στοιχείο '{}' για την ομάδα {} από τον γρίφο {}",
-                definition.evidenceKey(), teamId, definition.id());
     }
 }
