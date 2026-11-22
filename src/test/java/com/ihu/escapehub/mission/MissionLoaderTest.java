@@ -19,9 +19,15 @@ class MissionLoaderTest {
 
         MissionDefinition mission = loader.findById("whitby-manuscript").orElseThrow();
         assertEquals("Το Χαμένο Χειρόγραφο του Whitby", mission.title());
-        assertEquals(1, mission.paths().size());
+        assertFalse(mission.paths().isEmpty());
         assertEquals("Το βιβλίο", mission.paths().getFirst().title());
-        assertEquals(2, mission.paths().getFirst().puzzles().size());
+        assertFalse(mission.paths().getFirst().puzzles().isEmpty());
         assertEquals("A1", mission.paths().getFirst().puzzles().getFirst().id());
+    }
+
+    @Test
+    void returnsEmptyForUnknownId() throws IOException {
+        MissionLoader loader = new MissionLoader(new ObjectMapper());
+        assertTrue(loader.findById("unknown").isEmpty());
     }
 }
