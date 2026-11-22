@@ -6,7 +6,6 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 
-/** Landing page that proves the skeleton starts and serves a view. */
 @Route("")
 @PageTitle("EscapeHub")
 public class HomeView extends VerticalLayout {
