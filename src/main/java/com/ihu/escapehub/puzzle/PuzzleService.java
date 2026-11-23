@@ -35,6 +35,8 @@ public class PuzzleService {
         return PuzzleStatus.UNSOLVED;
     }
 
+    // Σημείωση: Δεν χρησιμοποιείται @Transactional εδώ, γιατί σε περίπτωση DataIntegrityViolationException
+    // το transaction θα μαρκαριζόταν ως rollback-only και θα πετούσε UnexpectedRollbackException.
     public PuzzleStatus submit(Long teamId, String puzzleId, String answer) {
         PuzzleDefinition definition = findPuzzleDefinition(puzzleId)
                 .orElseThrow(() -> new IllegalArgumentException("Ο γρίφος δεν βρέθηκε: " + puzzleId));
@@ -49,7 +51,10 @@ public class PuzzleService {
             try {
                 solvedPuzzleRepository.save(new SolvedPuzzle(teamId, puzzleId, LocalDateTime.now()));
             } catch (DataIntegrityViolationException e) {
-                return PuzzleStatus.SOLVED;
+                if (solvedPuzzleRepository.existsByTeamIdAndPuzzleId(teamId, puzzleId)) {
+                    return PuzzleStatus.SOLVED; // άλλος παίκτης το έλυσε ταυτόχρονα
+                }
+                throw e;
             }
             evidenceUnlocker.unlock(teamId, definition.evidenceKey());
         }
