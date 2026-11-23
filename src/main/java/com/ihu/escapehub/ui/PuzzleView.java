@@ -11,8 +11,11 @@ import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.router.Route;
+import jakarta.annotation.security.PermitAll;
+
 import java.util.Optional;
 
+@PermitAll
 @Route("puzzle")
 public class PuzzleView extends VerticalLayout {
 
