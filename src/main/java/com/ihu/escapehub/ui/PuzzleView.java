@@ -36,7 +36,9 @@ public class PuzzleView extends VerticalLayout {
         answerField.setWidthFull();
 
         Button submitButton = new Button("Απάντηση", event -> {
-            PuzzleStatus result = puzzleService.submit(1L, currentPuzzle.id(), answerField.getValue());
+            // TODO: αντικατάσταση του hardcoded teamId με το teamId της ομάδας του συνδεδεμένου χρήστη
+            Long teamId = 1L;
+            PuzzleStatus result = puzzleService.submit(teamId, currentPuzzle.id(), answerField.getValue());
 
             if (result == PuzzleStatus.SOLVED) {
                 Notification notification = Notification.show("Σωστό!", 3000, Notification.Position.MIDDLE);
