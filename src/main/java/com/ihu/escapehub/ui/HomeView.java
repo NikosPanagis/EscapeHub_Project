@@ -8,7 +8,7 @@ import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
 @PermitAll
-@Route("")
+@Route("home")
 @PageTitle("EscapeHub")
 public class HomeView extends VerticalLayout {
 
