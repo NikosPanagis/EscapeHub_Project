@@ -33,6 +33,8 @@ FROM eclipse-temurin:25-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
 USER app
 WORKDIR /application
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
 COPY --from=build /app/extracted/dependencies/ ./
 COPY --from=build /app/extracted/spring-boot-loader/ ./
 COPY --from=build /app/extracted/snapshot-dependencies/ ./

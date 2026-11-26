@@ -40,7 +40,7 @@ cp .env.example .env        # Windows (cmd): copy .env.example .env
 **1. Σήκωσε τη βάση** (από τον φάκελο του project, με ανοιχτό το Docker Desktop):
 
 ```bash
-docker compose up -d
+docker compose up -d db
 ```
 
 **2. Τρέξε την εφαρμογή:**
@@ -60,6 +60,34 @@ docker compose up -d
 docker compose down         # σταματά τη βάση, τα δεδομένα μένουν
 docker compose down -v      # σταματά τη βάση και ΣΒΗΝΕΙ τα δεδομένα της
 ```
+## Τρέξιμο με Docker
+
+Όλη η εφαρμογή (εφαρμογή και βάση) τρέχει με μία εντολή, χωρίς JDK ή Maven. Χρειάζεται μόνο ανοιχτό το Docker Desktop:
+
+```bash
+docker compose up --build
+```
+
+Η πρώτη φορά αργεί, γιατί κατεβάζει εικόνες και χτίζει την εφαρμογή. Μετά άνοιξε το <http://localhost:8080>.
+Σταμάτημα: `Ctrl+C` και μετά `docker compose down`.
+
+**Έτοιμο image από το GitHub** (μετά την έκδοση v0.2.0):
+
+```bash
+docker pull ghcr.io/nikospanagis/escapehub_project:v0.2.0
+```
+
+**Έκδοση και commit:** το <http://localhost:8080/actuator/info> δείχνει την έκδοση (`build.version`) και το commit (`git.commit`) της εφαρμογής που τρέχει.
+Στα releases το commit μπαίνει αυτόματα. Σε τοπικό build εμφανίζεται `local`, εκτός αν το ορίσεις:
+
+```powershell
+$env:GIT_COMMIT = git rev-parse HEAD      # PowerShell (Windows)
+docker compose up --build
+```
+
+```bash
+GIT_COMMIT=$(git rev-parse HEAD) docker compose up --build      # Linux / macOS
+```
 
 ## Έλεγχοι (tests)
 
@@ -77,7 +105,7 @@ docker compose down -v      # σταματά τη βάση και ΣΒΗΝΕΙ �
 - Διάγραμμα και περιγραφή: [`docs/arxitektoniki.md`](docs/arxitektoniki.md)
 - Αποφάσεις (ADRs): [`docs/adr/`](docs/adr/)
 - Εξωτερικά APIs (Wikidata, Open Library): [`docs/apis.md`](docs/apis.md)
-- Τεκμηρίωση REST API (OpenAPI): θα προστεθεί μαζί με τα πρώτα endpoints.
+- - Τεκμηρίωση REST API (OpenAPI): [Swagger UI](http://localhost:8080/swagger-ui.html) όταν τρέχει η εφαρμογή. Το JSON βρίσκεται στο `/v3/api-docs`.
 
 ## Δομή του repository
 
