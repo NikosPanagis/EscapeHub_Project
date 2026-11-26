@@ -9,7 +9,9 @@ import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import com.vaadin.flow.theme.lumo.LumoUtility;
+import jakarta.annotation.security.PermitAll;
 
+@PermitAll
 public class MainLayout extends AppLayout {
 
     public MainLayout(AuthenticationContext authenticationContext) {
