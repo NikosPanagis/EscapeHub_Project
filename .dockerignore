@@ -10,3 +10,5 @@ node_modules/
 .classpath
 *.iml
 .DS_Store
+.env
+.env.*

@@ -10,6 +10,24 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-escapehub}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-escapehub} -d ${POSTGRES_DB:-escapehub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .                      # προσωρινά· στο τέλος γίνεται image: ghcr.io/...
+    container_name: escapehub-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-escapehub}
+      POSTGRES_USER: ${POSTGRES_USER:-escapehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-escapehub}
 
 volumes:
   postgres_data:
